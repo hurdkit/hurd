@@ -564,7 +564,14 @@ diskfs_get_filemap (struct node *np, vm_prot_t prot)
     }
 
   if (prot & VM_PROT_WRITE)
-    right = np->dn->u.reg.memobj;
+    {
+      right = np->dn->u.reg.memobj;
+
+      /* Add a reference for each call, the caller will deallocate it.  */
+      err = mach_port_mod_refs (mach_task_self (), right,
+				MACH_PORT_RIGHT_SEND, +1);
+      assert_perror_backtrace (err);
+    }
   else
     {
       vm_offset_t offset = 0;
@@ -581,12 +588,11 @@ diskfs_get_filemap (struct node *np, vm_prot_t prot)
           errno = err;
           return MACH_PORT_NULL;
         }
-    }
 
-  /* Add a reference for each call, the caller will deallocate it.  */
-  err = mach_port_mod_refs (mach_task_self (), np->dn->u.reg.memobj,
-			    MACH_PORT_RIGHT_SEND, +1);
-  assert_perror_backtrace (err);
+      /* RIGHT is a fresh proxy right holding its own reference to the
+	 object; the caller deallocates RIGHT and no extra reference is
+	 needed.  */
+    }
 
   return right;
 }
