@@ -171,6 +171,12 @@ rtc_S_pioctl_rtc_rd_time (struct trivfs_protid *cred, struct rtc_time *tm)
      2068 inclusive)".  */
   tm->tm_wday -= 1;
   tm->tm_mon -= 1;
+  /* The month byte read from the CMOS is not guaranteed to be in the
+     1..12 range (RTC_SET_TIME does not validate it either); an out of
+     range value would make calculate_yday index mon_yday out of
+     bounds.  */
+  if (tm->tm_mon < 0 || tm->tm_mon > 11)
+    tm->tm_mon = 0;
   if (tm->tm_year < 69)
     tm->tm_year += 100;
 
