@@ -67,9 +67,14 @@ trivfs_open (struct trivfs_control *cntl,
 	  if (err)
 	    {
 	      /* Setting REALNODE to null signals the clean routine not to
-		 call the destroy hook, which we deallocate below anyway.  */
+		 call the destroy hook.  */
 	      new->realnode = MACH_PORT_NULL;
 	      ports_port_deref (new);
+	      /* Dropping the last reference synchronously runs
+		 trivfs_clean_protid, which releases PO and its reference on
+		 CNTL when the peropen refcount reaches zero.  Return instead
+		 of releasing them a second time below.  */
+	      return err;
 	    }
 	  else
 	    *cred = new;
