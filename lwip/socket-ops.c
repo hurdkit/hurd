@@ -127,23 +127,26 @@ lwip_S_socket_accept (struct sock_user * user,
   if (newsock->sockno == -1)
     {
       sock_release (newsock);
+      return errno;
     }
-  else
+
+  /* Set the peer's address for the caller */
+  err =
+    lwip_S_socket_create_address (0, addr.ss_family, (void *) &addr,
+				  addr_len, addr_port, addr_port_type);
+  if (err)
     {
-      /* Set the peer's address for the caller */
-      err =
-	lwip_S_socket_create_address (0, addr.ss_family, (void *) &addr,
-				      addr_len, addr_port, addr_port_type);
-      if (err)
-	return err;
-
-      newuser = make_sock_user (newsock, user->isroot, 0, 1);
-      *new_port = ports_get_right (newuser);
-      *new_port_type = MACH_MSG_TYPE_MAKE_SEND;
-      ports_port_deref (newuser);
+      /* Drop the accepted socket; nobody else holds it yet.  */
+      sock_release (newsock);
+      return err;
     }
 
-  return errno;
+  newuser = make_sock_user (newsock, user->isroot, 0, 1);
+  *new_port = ports_get_right (newuser);
+  *new_port_type = MACH_MSG_TYPE_MAKE_SEND;
+  ports_port_deref (newuser);
+
+  return 0;
 }
 
 kern_return_t
