@@ -481,6 +481,10 @@ trivfs_S_io_write (struct trivfs_protid * cred,
 
       *amount = datalen;
     }
+  else
+    /* No buffers available; report the failure instead of returning
+       success without ever setting *amount.  */
+    return ENOBUFS;
 
   return 0;
 }
