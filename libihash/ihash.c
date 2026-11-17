@@ -308,7 +308,7 @@ hurd_ihash_locp_add (hurd_ihash_t ht, hurd_ihash_locp_t locp,
     {
       assert (compare (ht, item->key, key));
       if (ht->cleanup)
-        (*ht->cleanup) (locp, ht->cleanup_data);
+        (*ht->cleanup) (item->value, ht->cleanup_data);
     }
 
   item->value = value;
