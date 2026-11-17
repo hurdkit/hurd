@@ -189,8 +189,11 @@ diskfs_get_filemap (struct node *np, vm_prot_t prot)
                                 MEMORY_OBJECT_COPY_DELAY, 0);
 	if (p == NULL)
 	  {
-	    diskfs_nrele_light (np);
+	    /* The matching nref_light only happens once the pager exists
+	       (and is released in pager_clear_user_data), so leave the
+	       refcount alone here.  */
 	    pthread_spin_unlock (&node2pagelock);
+	    errno = ENOMEM;
 	    return MACH_PORT_NULL;
 	  }
 	upi = pager_get_upi (p);
