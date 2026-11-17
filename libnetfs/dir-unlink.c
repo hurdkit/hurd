@@ -25,7 +25,10 @@ kern_return_t
 netfs_S_dir_unlink (struct protid *user, const_string_t name)
 {
   error_t err;
-  
+
+  if (!user)
+    return EOPNOTSUPP;
+
   pthread_mutex_lock (&user->po->np->lock);
   err = netfs_attempt_unlink (user->user, user->po->np, name);
   pthread_mutex_unlock (&user->po->np->lock);
