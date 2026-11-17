@@ -1874,7 +1874,8 @@ trivfs_S_io_clear_some_openmodes (struct trivfs_protid *cred,
     return EOPNOTSUPP;
 
   pthread_mutex_lock (&global_lock);
-  if ((cred->po->openmodes & O_ASYNC) && --num_icky_async_peropens == 0)
+  if ((bits & O_ASYNC) && (cred->po->openmodes & O_ASYNC)
+      && --num_icky_async_peropens == 0)
     termflags &= ~ICKY_ASYNC;
   cred->po->openmodes &= ~(bits & HONORED_STATE_MODES);
   pthread_mutex_unlock (&global_lock);
