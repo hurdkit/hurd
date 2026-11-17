@@ -139,7 +139,7 @@ add_terminal (struct ttyent *tt)
       else
 	{
 	  ttys = newttys;
-	  memset (&ttys[nttys], 0, ttyslen);
+	  memset (&ttys[nttys], 0, ttyslen * sizeof ttys[0]);
 	  ttyslen *= 2;
 	}
     }
