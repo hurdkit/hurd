@@ -22,6 +22,9 @@
 void
 iohelp_free_iouser (struct iouser *iouser)
 {
+  if (! iouser)
+    return;
+
   idvec_free (iouser->uids);
   idvec_free (iouser->gids);
   free (iouser);

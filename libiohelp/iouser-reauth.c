@@ -50,6 +50,7 @@ error_t iohelp_reauth (struct iouser **user,
       if (new->gids)
 	idvec_free (new->gids);
       free (new);
+      *user = 0;
       return ENOMEM;
     }
 

@@ -56,7 +56,19 @@ trivfs_S_io_reauthenticate (struct trivfs_protid *cred,
     mach_port_deallocate (mach_task_self (), rendport);
   mach_port_deallocate (mach_task_self (), auth);
   if (err)
-    return err;
+    {
+      /* iohelp_reauth failed without consuming NEWRIGHT, and NEWCRED
+	 was never installed anywhere.  Release the send right, give the
+	 ports clean routine the peropen reference and the null realnode
+	 and user it expects, and drop our reference to NEWCRED.  */
+      mach_port_deallocate (mach_task_self (), newright);
+      newcred->po = cred->po;
+      refcount_ref (&newcred->po->refcnt);
+      newcred->realnode = MACH_PORT_NULL;
+      newcred->user = 0;
+      ports_port_deref (newcred);
+      return err;
+    }
 
   mach_port_deallocate (mach_task_self (), newright);
   newcred->isroot = _is_privileged (newcred->user->uids);
