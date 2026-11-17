@@ -103,7 +103,7 @@ get_dirents (struct node *dir,
       size_t size = (max_data_len == 0 ? DIRENTS_CHUNK_SIZE : max_data_len);
 
       *data = mmap (0, size, PROT_READ|PROT_WRITE, MAP_ANON, 0, 0);
-      err = (data != (void *) -1) ? errno : 0;
+      err = (*data == (void *) -1) ? errno : 0;
 
       if (! err)
 	{
