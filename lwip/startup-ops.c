@@ -35,5 +35,6 @@ lwip_S_startup_dosync (mach_port_t handle)
 
   ports_class_iterate (socketport_class, ports_destroy_right);
   ports_class_iterate (addrport_class, ports_destroy_right);
+  ports_port_deref (inpi);
   return 0;
 }
