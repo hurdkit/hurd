@@ -23,6 +23,7 @@
 
 #include <assert.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -501,6 +502,13 @@ fshelp_rlock_tweak (struct rlock_box *box, pthread_mutex_t *mutex,
   len = lock->l_len;
   if (len < 0)
     return EINVAL;
+
+  /* Reject a range whose end overflows: every comparison below computes
+     START + LEN in signed 64-bit arithmetic, and a wrapped end would
+     corrupt the sorted-list invariants (e.g. F_UNLCK silently failing
+     to remove the lock).  */
+  if (len != 0 && start > INT64_MAX - len)
+    return EOVERFLOW;
 
   if (cmd == F_SETLK64 && lock->l_type == F_UNLCK)
     return unlock_region (start, len);
