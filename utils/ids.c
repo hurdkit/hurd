@@ -52,7 +52,7 @@ int
 main(int argc, char *argv[])
 {
   error_t err;
-  task_t task;
+  task_t task = MACH_PORT_NULL;
   mach_port_t msgport;
   int pid = -1;
   auth_t auth = getauth ();
@@ -147,7 +147,8 @@ main(int argc, char *argv[])
     error (6, err, "%d: Cannot get process authentication", pid);
 
   mach_port_deallocate (mach_task_self (), msgport);
-  mach_port_deallocate (mach_task_self (), task);
+  if (task != MACH_PORT_NULL)
+    mach_port_deallocate (mach_task_self (), task);
 
   /* Get the ids that AUTH represents.  */
   err = ugids_merge_auth (&ugids, auth);
