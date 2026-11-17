@@ -203,8 +203,10 @@ init_ifs (void *arg)
 	{
 	  /* The interface failed to init */
 	  if (netif->state != &ifc)
-	    /* It failed after setting the control block, must free it */
-	    mem_free (netif->state);
+	    /* It failed after setting the control block, must free it.
+	       The control block comes from calloc in the *_device_init
+	       callbacks, so it must not go through lwIP's allocator.  */
+	    free (netif->state);
 	  free (netif);
 	  continue;
 	}
