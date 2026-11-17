@@ -156,7 +156,11 @@ hurdtunif_output (struct netif *netif, struct pbuf *p,
       pbuf_free (oldest);
     }
 
-  enqueue (&tunif->queue, pcopy);
+  /* If the copy failed there is nothing to hand to the reader; drop
+     the packet rather than enqueueing a NULL pbuf, which enqueue
+     dereferences.  */
+  if (pcopy != NULL)
+    enqueue (&tunif->queue, pcopy);
 
   if (tunif->read_blocked)
     {
