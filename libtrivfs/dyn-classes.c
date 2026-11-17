@@ -102,11 +102,16 @@ add_el (void *el, void (*free_el)(void *),
 
   if (!new_vec || !new_aux_vec)
     {
+      /* A realloc that succeeded already freed the block it replaced,
+	 so store the moved vector back; leaving the old pointer in
+	 place would leave it dangling.  */
+      if (new_vec)
+	*vec = new_vec;
+      if (new_aux_vec)
+	*aux_vec = new_aux_vec;
       if (free_el)
 	(*free_el) (el);
-      free (new_vec);
-      free (new_aux_vec);
-      /* One of the vectors might be the wrong size, but who cares.  */
+      pthread_mutex_unlock (&dyn_lock);
       return ENOMEM;
     }
 
