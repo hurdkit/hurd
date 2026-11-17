@@ -831,6 +831,11 @@ print_contents (mach_msg_header_t *inp,
 
   int first = 1;
 
+  /* The kernel only validates port-typed descriptors; every other
+     type field is just data from the traced program, so everything
+     below is bounded by the actual message size.  */
+  enum { ool_nelt_max = 4096 };
+
   /* Process the message data, wrapping ports and printing data.  */
   while ((char *) msg_buf_ptr < (char *) inp + inp->msgh_size)
     {
@@ -861,11 +866,35 @@ print_contents (mach_msg_header_t *inp,
 	{
 	  /* This datum is out-of-line, meaning the message actually
 	     contains a pointer to a vm_allocate'd region of data.  */
+	  if ((char *) msg_buf_ptr + sizeof (void *)
+	      > (char *) inp + inp->msgh_size)
+	    /* The claimed pointer runs past the end of the message.  */
+	    break;
 	  data = *(void **) data;
 	  msg_buf_ptr += sizeof (void *);
+	  /* The region was copied in by the kernel, but the element count
+	     is still the sender's claim; keep it sane.  */
+	  if (nelt > ool_nelt_max)
+	    nelt = ool_nelt_max;
 	}
       else
-	msg_buf_ptr += ((nelt * eltsize + MSG_ALIGNMENT - 1) & ~(MSG_ALIGNMENT - 1));
+	{
+	  /* The type fields are data as far as the kernel is concerned:
+	     only read as many elements as the message actually holds.  */
+	  ptrdiff_t remaining =
+	    ((char *) inp + inp->msgh_size - (char *) data);
+	  if (remaining <= 0)
+	    break;
+	  if (nelt > (mach_msg_type_number_t) remaining / (eltsize ? : 1))
+	    nelt = (mach_msg_type_number_t) remaining / (eltsize ? : 1);
+	  mach_msg_size_t advance =
+	    ((nelt * eltsize + MSG_ALIGNMENT - 1) & ~(MSG_ALIGNMENT - 1));
+	  if (advance == 0)
+	    /* A descriptor that consumes no space at all would make the
+	       walk loop forever on the same spot.  */
+	    break;
+	  msg_buf_ptr += advance;
+	}
 
       if (first)
 	first = 0;
@@ -877,19 +906,22 @@ print_contents (mach_msg_header_t *inp,
 	 what task that port name is meaningful in.  If it's meaningful in
 	 a traced task, then it refers to our intercepting port rather than
 	 the original port anyway.  */
-      if (MACH_MSG_TYPE_PORT_ANY_RIGHT (name))
+      if (MACH_MSG_TYPE_PORT_ANY_RIGHT (name)
+	  && (inp->msgh_bits & MACH_MSGH_BITS_COMPLEX)
+	  && eltsize == (is_inline
+			 ? sizeof (mach_port_name_inlined_t)
+			 : sizeof (mach_port_t)))
 	{
-	  /* These are port rights.  Translate them into wrappers.  */
+	  /* These are port rights.  Translate them into wrappers.
+	     Anything else claiming a port type is a bogus descriptor and
+	     gets printed as opaque data below.  */
 	  mach_msg_type_number_t i;
+	  /* The count is the sender's claim; keep the stack allocation
+	     bounded no matter what the descriptor says.  */
+	  if (nelt > ool_nelt_max)
+	    nelt = ool_nelt_max;
 	  mach_msg_type_name_t newtypes[nelt ? : 1];
 	  int poly;
-
-	  assert_backtrace (inp->msgh_bits & MACH_MSGH_BITS_COMPLEX);
-
-	  if (is_inline)
-	    assert_backtrace (eltsize == sizeof (mach_port_name_inlined_t));
-	  else
-	    assert_backtrace (eltsize == sizeof (mach_port_t));
 
 	  poly = 0;
 	  for (i = 0; i < nelt; ++i)
@@ -1054,8 +1086,15 @@ wrap_new_thread (mach_msg_header_t *inp, struct req_info *req)
   struct sender_info *send_wrapper = ports_lookup_port (traced_bucket,
 							reply->child_thread, 0);
 
-  assert_backtrace (send_wrapper);
-  assert_backtrace (send_wrapper->receive_right);
+  if (!send_wrapper || !send_wrapper->receive_right)
+    {
+      /* The reply did not name one of our wrapper ports; leave it
+	 alone rather than aborting.  */
+      error (0, 0, "thread_create reply with unknown thread port");
+      if (send_wrapper)
+	ports_port_deref (send_wrapper);
+      return;
+    }
   thread_port = send_wrapper->receive_right->forward;
 
   err = mach_port_insert_right (mach_task_self (), reply->child_thread,
@@ -1097,8 +1136,15 @@ wrap_new_task (mach_msg_header_t *inp, struct req_info *req)
   /* The send wrapper for the new task itself. */
   struct sender_info *task_wrapper2;
 
-  assert_backtrace (task_wrapper1);
-  assert_backtrace (task_wrapper1->receive_right);
+  if (!task_wrapper1 || !task_wrapper1->receive_right)
+    {
+      /* The reply did not name one of our wrapper ports; leave it
+	 alone rather than aborting.  */
+      error (0, 0, "task_create reply with unknown task port");
+      if (task_wrapper1)
+	ports_port_deref (task_wrapper1);
+      return;
+    }
 
   task_port = task_wrapper1->receive_right->forward;
   add_task (task_port);
@@ -1181,7 +1227,14 @@ trace_and_forward (mach_msg_header_t *inp, mach_msg_header_t *outp)
   else
     info = ports_lookup_port (traced_bucket, inp->msgh_local_port, NULL);
 
-  assert_backtrace (info);
+  if (!info)
+    {
+      /* The message did not name one of our ports (the wrapper may
+	 have died while the message was in flight).  There is nothing
+	 to forward it to; drop it instead of aborting.  */
+      ((mig_reply_header_t *) outp)->RetCode = MIG_NO_REPLY;
+      return 1;
+    }
 
   /* A notification message from the kernel appears to have been sent
      with a send-once right, even if there have never really been any.  */
@@ -1326,22 +1379,29 @@ trace_and_forward (mach_msg_header_t *inp, mach_msg_header_t *outp)
 	{
 	  struct req_info *req = remove_request (inp->msgh_id - 100,
 						 inp->msgh_remote_port);
-	  assert_backtrace (req);
-	  req->is_req = FALSE;
-	  /* This sure looks like an RPC reply message.  */
-	  mig_reply_header_t *rh = (void *) inp;
-	  print_reply_header ((struct send_once_info *) info, rh, req);
-	  putc (' ', ostream);
-	  fflush (ostream);
-	  print_contents (&rh->Head, rh + 1, req);
-	  putc ('\n', ostream);
+	  if (req == NULL)
+	    /* No forwarded request matches this id and reply port, so
+	       whatever this is, it is not a real RPC reply.  Say so and
+	       skip the reply handling rather than aborting.  */
+	    fprintf (ostream, "unmatched reply (id %d)\n", inp->msgh_id);
+	  else
+	    {
+		  req->is_req = FALSE;
+		  /* This sure looks like an RPC reply message.  */
+		  mig_reply_header_t *rh = (void *) inp;
+		  print_reply_header ((struct send_once_info *) info, rh, req);
+		  putc (' ', ostream);
+		  fflush (ostream);
+		  print_contents (&rh->Head, rh + 1, req);
+		  putc ('\n', ostream);
 
-	  if (inp->msgh_id == 2161)/* the reply message for thread_create */
-	    wrap_new_thread (inp, req);
-	  else if (inp->msgh_id == 2107) /* for task_create */
-	    wrap_new_task (inp, req);
+		  if (inp->msgh_id == 2161)/* the reply message for thread_create */
+		    wrap_new_thread (inp, req);
+		  else if (inp->msgh_id == 2107) /* for task_create */
+		    wrap_new_task (inp, req);
 
-	  free (req);
+		  free (req);
+	    }
 	}
       else
 	{
@@ -1351,14 +1411,12 @@ trace_and_forward (mach_msg_header_t *inp, mach_msg_header_t *outp)
 
 	  /* Print something about the message header.  */
 	  print_request_header ((struct sender_info *) info, inp);
-	  /* It's a notification message. */
+	  /* It's a notification message id.  Only send-once wrappers get
+	     real kernel notifications; the traced program can put any id
+	     in a message to a send wrapper, so there is nothing to assert
+	     here (mach_notify_port_destroyed remains unhandled).  */
 	  if (inp->msgh_id <= 72 && inp->msgh_id >= 64)
-	    {
-	      assert_backtrace (info->type == MACH_MSG_TYPE_MOVE_SEND_ONCE);
-	      /* mach_notify_port_destroyed message has a port,
-	       * TODO how do I handle it? */
-	      assert_backtrace (inp->msgh_id != 69);
-	    }
+	    ;
 
 	  /* If it's mach_port RPC,
 	   * the port rights in the message will be moved to the target task. */
@@ -1578,18 +1636,19 @@ print_data (mach_msg_type_name_t type,
   switch (type)
     {
     case MACH_MSG_TYPE_PORT_NAME:
-      assert_backtrace (eltsize == sizeof (mach_port_t));
-      {
-	mach_msg_type_number_t i;
-	fprintf (ostream, "pn{");
-	for (i = 0; i < nelt; ++i)
-	  {
-	    fprintf (ostream, "%*u", (i > 0) ? 4 : 3,
-		     (unsigned int) ((mach_port_t *) data)[i]);
-	  }
-	fprintf (ostream, "}");
-	return;
-      }
+      if (eltsize == sizeof (mach_port_t))
+	{
+	  mach_msg_type_number_t i;
+	  fprintf (ostream, "pn{");
+	  for (i = 0; i < nelt; ++i)
+	    {
+	      fprintf (ostream, "%*u", (i > 0) ? 4 : 3,
+		       (unsigned int) ((mach_port_t *) data)[i]);
+	    }
+	  fprintf (ostream, "}");
+	  return;
+	}
+      break;
 
     case MACH_MSG_TYPE_STRING:
     case MACH_MSG_TYPE_CHAR:
@@ -1672,14 +1731,17 @@ print_data (mach_msg_type_name_t type,
 	FMT ("%g", double);
       else if (eltsize == sizeof (long double))
 	FMT ("%Lg", long double);
-      else
-	abort ();
+      /* An unhandled size is data from the traced program, not a
+	 reason to die; fall through to the opaque dump below.  */
       break;
     }
 
   /* XXX */
-  fprintf (ostream, "\t%#x (type %d, %d*%d)\n", *(const int *)data, type,
-	   nelt, eltsize);
+  if (nelt && nelt * eltsize >= sizeof (int))
+    fprintf (ostream, "\t%#x (type %d, %d*%d)\n", *(const int *)data, type,
+	     nelt, eltsize);
+  else
+    fprintf (ostream, "\t(type %d, %d*%d)\n", type, nelt, eltsize);
 }
 
 
