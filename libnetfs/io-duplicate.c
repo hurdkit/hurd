@@ -30,6 +30,9 @@ netfs_S_io_duplicate (struct protid *user,
   struct protid *newpi;
   struct iouser *clone;
 
+  if (!user)
+    return EOPNOTSUPP;
+
   err = iohelp_dup_iouser (&clone, user->user);
   if (err)
     return err;
