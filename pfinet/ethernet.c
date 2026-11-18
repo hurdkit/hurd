@@ -303,11 +303,17 @@ ethernet_xmit (struct sk_buff *skb, struct device *dev)
 	  ethernet_close (dev);
 	  ethernet_open (dev);
 	}
-      else
+      else if (err)
 	{
-	  assert_perror_backtrace (err);
-	  assert_backtrace (count == skb->len);
+	  /* The driver did not take the frame: its transmit queue is
+	     full (the write does not wait), or the device reported an
+	     error.  An Ethernet may lose frames, and the protocols above
+	     send again what matters.  */
+	  retbuf.tx_dropped++;
+	  break;
 	}
+      else
+	assert_backtrace (count == skb->len);
     }
   while (err);
 
