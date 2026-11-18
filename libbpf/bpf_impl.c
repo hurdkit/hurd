@@ -639,6 +639,14 @@ net_set_filter(if_filter_list_t *ifp, mach_port_t rcv_port, int priority,
 	io_return_t           rval;
 	boolean_t         in, out;
 
+	/*
+	 * A null receive port marks the header of a hash table in the
+	 * filter list (see `indication of dummy' below), so an entry for a
+	 * caller's null or dead port would later be read as such a header.
+	 */
+	if (!MACH_PORT_VALID (rcv_port))
+		return (D_INVALID_OPERATION);
+
 	/* Check the filter syntax. */
 
 	/* Reject filters which are zero or overflow */
