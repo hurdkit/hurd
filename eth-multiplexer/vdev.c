@@ -299,6 +299,10 @@ deliver_msg(struct net_rcv_msg *msg, struct vether_device *vdev)
       if (ret_count)
 	{
 	  debug ("before delivering the packet\n");
+	  /* A send that timed out comes back with the header the kernel
+	     made of it, where the destination is a right to be moved.
+	     Ask for a copy again for every destination.  */
+	  msg->msg_hdr.msgh_bits = MACH_MSGH_BITS (MACH_MSG_TYPE_COPY_SEND, 0);
 	  msg->msg_hdr.msgh_remote_port = dest;
 	  err = mach_msg ((mach_msg_header_t *)msg,
 			  MACH_SEND_MSG|MACH_SEND_TIMEOUT,
@@ -306,8 +310,15 @@ deliver_msg(struct net_rcv_msg *msg, struct vether_device *vdev)
 			  0, MACH_PORT_NULL);
 	  if (err != MACH_MSG_SUCCESS)
 	    {
-	      mach_port_deallocate(mach_task_self (),
-				   ((mach_msg_header_t *)msg)->msgh_remote_port);
+	      /* A send that times out on a full queue hands the message
+		 back, and with it one more reference to the destination,
+		 which is released here.  A send that the kernel refuses
+		 before it takes the message (the destination is a dead
+		 name) hands nothing back: the one reference left is the
+		 filter's own, and remove_dead_filter releases it.  */
+	      if ((err & ~MACH_MSG_MASK) == MACH_SEND_TIMED_OUT)
+		mach_port_deallocate (mach_task_self (),
+				      msg->msg_hdr.msgh_remote_port);
 	      error (0, err, "mach_msg");
 	    }
 	  debug ("after delivering the packet\n");
