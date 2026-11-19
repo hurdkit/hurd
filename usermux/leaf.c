@@ -52,13 +52,19 @@ netfs_get_translator (struct node *node, char **trans, mach_msg_type_number_t *t
     {
       char *argz = 0;
       size_t argz_len = 0;
+      error_t err;
       fshelp_touch (&node->nn_stat, TOUCH_ATIME, usermux_maptime);
       if (S_ISLNK (node->nn_stat.st_mode))
 	argz_add (&argz, &argz_len, _HURD_SYMLINK);
-      return
-	argz_append (&argz, &argz_len, node->nn->trans, node->nn->trans_len);
-      *trans = argz;
-      *trans_len = argz_len;
+      err = argz_append (&argz, &argz_len, node->nn->trans, node->nn->trans_len);
+      if (err)
+	free (argz);
+      else
+	{
+	  *trans = argz;
+	  *trans_len = argz_len;
+	}
+      return err;
     }
 }
 
