@@ -21,6 +21,7 @@
 #include <sys/mman.h>
 #include <arpa/inet.h>
 #include <sys/un.h>
+#include <stddef.h>
 
 #include <hurd/fsys.h>
 #include <hurd/msg.h>
@@ -346,8 +347,19 @@ print_port_info (mach_port_t name, mach_port_type_t type, task_t task,
 		    if (type == AF_UNIX)
 		      {
 			struct sockaddr_un *sa_un = (struct sockaddr_un *) psa;
+			int path_len = ((int) salen
+					- offsetof (struct sockaddr_un, sun_path));
 
-			fprintf (stream, "(UNIX:%s)", sa_un->sun_path);
+			/* The socket server controls every byte of sun_path and
+			   may bind a path that is not NUL-terminated, so never
+			   print past the bytes covered by the address.  */
+			if (path_len < 0)
+			  path_len = 0;
+			else if (path_len > sizeof sa_un->sun_path)
+			  path_len = sizeof sa_un->sun_path;
+
+			fprintf (stream, "(UNIX:%.*s)", path_len,
+				 sa_un->sun_path);
 		      }
 		    else if (type == AF_INET)
 		      {
