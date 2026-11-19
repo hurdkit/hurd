@@ -173,9 +173,14 @@ pager_memcpy (struct pager *pager, memory_object_t memobj,
   jmp_buf buf;
   void fault (int signo, long int sigcode, struct sigcontext *scp)
     {
+      /* The window is mapped at pager offset OFFSET - PAGEOFF and the
+	 data starts PAGEOFF bytes into it, so SIGCODE corresponds to
+	 pager byte SIGCODE - WINDOW + OFFSET - PAGEOFF, of which SIGCODE
+	 - WINDOW - PAGEOFF bytes were copied.  */
+      size_t pageoff = offset & (vm_page_size - 1);
       assert_backtrace (scp->sc_error == EKERN_MEMORY_ERROR);
-      err = pager_get_error (pager, sigcode - window + offset);
-      n -= sigcode - window;
+      err = pager_get_error (pager, sigcode - window + offset - pageoff);
+      n -= sigcode - window - pageoff;
       vm_deallocate (mach_task_self (), window, window_size);
       siglongjmp (buf, 1);
     }
