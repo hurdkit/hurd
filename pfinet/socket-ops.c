@@ -65,36 +65,40 @@ S_socket_create (struct trivfs_protid *master,
   become_task_protid (master);
 
   sock = sock_alloc ();
-
-  sock->type = sock_type;
-
-  isroot = master->isroot;
-  if (!isroot)
-    {
-      struct stat st;
-
-      /* XXX */
-      st.st_uid = pfinet_owner;
-      st.st_gid = pfinet_group;
-
-      err = fshelp_isowner (&st, master->user);
-      if (! err)
-	isroot = 1;
-    }
-
-  if (master->pi.class == pfinet_protid_portclasses[PORTCLASS_INET])
-    err = - (*net_families[PF_INET]->create) (sock, protocol);
-  else
-    err = - (*net_families[PF_INET6]->create) (sock, protocol);
-
-  if (err)
-    sock_release (sock);
+  if (! sock)
+    err = ENOMEM;
   else
     {
-      user = make_sock_user (sock, isroot, 0, 1);
-      *port = ports_get_right (user);
-      *porttype = MACH_MSG_TYPE_MAKE_SEND;
-      ports_port_deref (user);
+      sock->type = sock_type;
+
+      isroot = master->isroot;
+      if (!isroot)
+	{
+	  struct stat st;
+
+	  /* XXX */
+	  st.st_uid = pfinet_owner;
+	  st.st_gid = pfinet_group;
+
+	  err = fshelp_isowner (&st, master->user);
+	  if (! err)
+	    isroot = 1;
+	}
+
+      if (master->pi.class == pfinet_protid_portclasses[PORTCLASS_INET])
+	err = - (*net_families[PF_INET]->create) (sock, protocol);
+      else
+	err = - (*net_families[PF_INET6]->create) (sock, protocol);
+
+      if (err)
+	sock_release (sock);
+      else
+	{
+	  user = make_sock_user (sock, isroot, 0, 1);
+	  *port = ports_get_right (user);
+	  *porttype = MACH_MSG_TYPE_MAKE_SEND;
+	  ports_port_deref (user);
+	}
     }
 
   pthread_mutex_unlock (&global_lock);
