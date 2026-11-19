@@ -66,11 +66,14 @@ netfs_S_dir_mkfile (struct protid *diruser, int flags, mode_t mode,
     {
       if (user)
 	iohelp_free_iouser (user);
-
-      if (newpo)
-	netfs_release_peropen (newpo);
     }
 
   netfs_nput (np);
+
+  /* Release the peropen only after dropping NP's lock: NP is still
+     locked here, and netfs_release_peropen takes its node lock.  */
+  if (err && newpo)
+    netfs_release_peropen (newpo);
+
   return err;
 }
