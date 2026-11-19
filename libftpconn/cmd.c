@@ -97,16 +97,21 @@ ftp_conn_cmd (struct ftp_conn *conn, const char *cmd, const char *arg,
       char buf[200];
       size_t out =
 	snprintf (buf, sizeof buf, arg ? "%s %s\r\n" : "%s\r\n", cmd, arg);
-      err = _write (conn->control, buf, out);
+      /* SNPRINTF returns the length the whole command would have had,
+	 which can exceed BUF; only its first MIN (OUT, sizeof buf - 1)
+	 bytes were actually stored in BUF.  */
+      size_t len = (out < sizeof buf) ? out : sizeof buf - 1;
+      err = _write (conn->control, buf, len);
 
-      if (!err && conn->hooks && conn->hooks->cntl_debug && out >= 2)
+      if (!err && conn->hooks && conn->hooks->cntl_debug && len >= 2)
 	{
-	  buf[out - 2] = '\0';	/* Stomp the CR & NL.  */
+	  buf[len - 2] = '\0';	/* Stomp the CR & NL.  */
 	  (* conn->hooks->cntl_debug) (conn, FTP_CONN_CNTL_DEBUG_CMD, buf);
 	}
 
-      if (!err && out == sizeof buf)
-	err = _long_cmd (conn->control, cmd, arg, sizeof buf);
+      if (!err && out > len)
+	/* BUF did not hold the whole command; write what is left.  */
+	err = _long_cmd (conn->control, cmd, arg, len);
     }
 
   if (!err && (reply || reply_txt))
