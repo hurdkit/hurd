@@ -39,6 +39,12 @@ diskfs_S_io_prenotify (struct protid *cred,
 
   np = cred->po->np;
 
+  /* Growing the file allocates blocks and can update metadata; only
+     allow it on descriptors opened for writing, like io_write and
+     file_set_size do.  */
+  if (!(cred->po->openstat & O_WRITE))
+    return EBADF;
+
   txn = diskfs_journal_start_transaction ();
   /* Clamp it down */
   pthread_mutex_lock (&np->lock);
