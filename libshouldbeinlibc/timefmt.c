@@ -210,8 +210,16 @@ fmt_seconds (struct timeval *tv, int leading_zeros, int frac_places,
   if (tv->tv_sec > DAY)
     return fmt_named_interval (tv, width, buf, buf_len);
 
+  /* The fraction needs FRAC_PLACES + 1 characters; keep it within WIDTH
+     both so the subtraction below cannot wrap and so that printing the
+     fraction stays inside BUF.  */
   if (frac_places > 0)
-    width -= frac_places + 1;
+    {
+      if (frac_places > (int) width - 1)
+	frac_places = (int) width - 1;
+      if (frac_places > 0)
+	width -= frac_places + 1;
+    }
 
   /* See if this time won't fit at all in fixed format.  */
   if ((secs > 10*HOUR && width < 8)
