@@ -54,6 +54,8 @@ lookup_one (cons_t cons, const char *name, vcons_list_t *vcons_entry)
   nr = strtoul (name, &tail, 10);
   if (!errno && *tail == '\0' && nr > 0)
     return cons_lookup (cons, nr, 0, vcons_entry);
+  /* NAME does not designate a virtual console; report no match.  */
+  *vcons_entry = NULL;
   return 0;
 }
 
@@ -62,7 +64,7 @@ kern_return_t
 cons_S_dir_changed (cons_notify_t notify, natural_t tickno,
 		    dir_changed_type_t change, const_string_t name)
 {
-  error_t err;
+  error_t err = 0;
   cons_t cons;
 
   if (!notify || !notify->cons)
@@ -102,7 +104,7 @@ cons_S_dir_changed (cons_notify_t notify, natural_t tickno,
       {
 	vcons_list_t vcons_entry;
 	err = lookup_one (cons, name, &vcons_entry);
-	if (!err)
+	if (!err && vcons_entry)
 	  {
 	    cons_vcons_remove (cons, vcons_entry);
 	    if (vcons_entry->prev)
