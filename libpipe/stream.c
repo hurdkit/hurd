@@ -37,6 +37,9 @@ stream_write (struct pq *pq, void *source,
 {
   struct packet *packet = pq_tail (pq, PACKET_TYPE_DATA, source);
 
+  if (! packet)
+    return ENOBUFS;
+
   if (packet_readable (packet) > 0
       && data_len > PACKET_SIZE_LARGE
       && (! page_aligned (data - packet->buf_end)
@@ -46,7 +49,7 @@ stream_write (struct pq *pq, void *source,
        the current packet can't be extended in place.  */
     packet = pq_queue (pq, PACKET_TYPE_DATA, source);
 
-  if (!packet)
+  if (! packet)
     return ENOBUFS;
   else
     return packet_write (packet, data, data_len, amount);
