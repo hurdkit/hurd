@@ -50,5 +50,5 @@ deduce_term_size (int fd, char *type, int *width, int *height)
   if (height)
     *height = h;
 
-  return (!width || w) && (!height && h);
+  return (!width || w) && (!height || h);
 }
