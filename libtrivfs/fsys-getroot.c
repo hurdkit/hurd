@@ -94,10 +94,11 @@ trivfs_S_fsys_getroot (struct trivfs_control *cntl,
 
   /* Validate permissions.  */
   if (! trivfs_check_access_hook)
-    file_check_access (new_realnode, &perms);
+    err = file_check_access (new_realnode, &perms);
   else
     (*trivfs_check_access_hook) (cntl, user, new_realnode, &perms);
-  if ((flags & (O_READ|O_WRITE|O_EXEC) & perms)
+  if (! err
+      && (flags & (O_READ|O_WRITE|O_EXEC) & perms)
       != (flags & (O_READ|O_WRITE|O_EXEC)))
     err = EACCES;
 
