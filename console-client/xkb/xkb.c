@@ -494,12 +494,16 @@ xkb_compose_init (const char *composefile) {
 error_t
 xkb_context_init (const char *rules, const char *model, const char *layout, const char *variant, const char* options, const char *composefile)
 {
+  error_t err;
+
   /* initialize a xka context */
   ctx = xkb_context_new (XKB_CONTEXT_NO_FLAGS);
   if (!ctx)
     return ENOMEM;
 
-  xkb_load_keymap (rules, model, layout, variant, options);
+  err = xkb_load_keymap (rules, model, layout, variant, options);
+  if (err)
+    return err;
 
   /* load the state */
   state = xkb_state_new (keymap);
