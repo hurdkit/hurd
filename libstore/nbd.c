@@ -371,6 +371,10 @@ nbdopen (const char *name, int *mod_flags,
 	return EINVAL;
       if (*endp != '\0')
 	return EINVAL;
+      /* A block size of zero would later divide the store length by
+	 zero; reject it here.  */
+      if (*blocksize == 0)
+	return EINVAL;
     }
 
   /* Now look up the host name and get a TCP connection.  */
