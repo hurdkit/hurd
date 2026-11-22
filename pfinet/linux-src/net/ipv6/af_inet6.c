@@ -218,7 +218,7 @@ static int inet6_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 			return(-EADDRNOTAVAIL);
 	} else {
 		if (addr_type != IPV6_ADDR_ANY) {
-			struct net_device *dev = NULL;
+			struct device *dev = NULL;
 
 			if (addr_type & IPV6_ADDR_LINKLOCAL) {
 				if (addr_len >= sizeof(struct sockaddr_in6) &&
