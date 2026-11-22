@@ -60,6 +60,47 @@ checkpath(struct node *source,
     }
 }
 
+/* Repair the ".." entry of the directory FNP.  The entry is supposed to
+   name FDP, the directory FNP verifiably resides in, but an interrupted
+   rename can leave it naming TDP (a cross-directory rename failed after
+   its step-2 rewrite) or some other stale node.  Rewrite ".." to point
+   back at FDP and keep the parent link counts matching whatever ".."
+   ends up referring to.  The stale parent's count is only adjusted when
+   it is TDP, whose lock the caller holds; a count error left on any
+   other node is repairable by fsck, unlike the ".." mismatch.  FNP, FDP
+   and TDP are locked on entry and on return.  If the ".." entry cannot
+   be rewritten, the link counts are left untouched, so they keep
+   matching whatever ".." still refers to.  */
+static void
+heal_dotdot (struct node *fnp, struct node *fdp, struct node *tdp,
+	     struct protid *fromcred)
+{
+  error_t err;
+  void *buf = alloca (diskfs_dirstat_size);
+  struct dirstat *ds = buf;
+  struct node *tmpnp;
+
+  err = diskfs_lookup (fnp, "..", RENAME | SPEC_DOTDOT, &tmpnp, ds,
+		       fromcred);
+  if (err || tmpnp == fdp)
+    return;
+
+  err = diskfs_dirrewrite (fnp, tmpnp, fdp, "..", ds);
+  if (err)
+    return;
+
+  fdp->dn_stat.st_nlink++;
+  fdp->dn_set_ctime = 1;
+  diskfs_node_update (fdp, diskfs_synchronous);
+
+  if (tmpnp == tdp)
+    {
+      tdp->dn_stat.st_nlink--;
+      tdp->dn_set_ctime = 1;
+      diskfs_node_update (tdp, diskfs_synchronous);
+    }
+}
+
 /* Rename directory node FNP (whose parent is FDP, and which has name
    FROMNAME in that directory) to have name TONAME inside directory
    TDP.  None of these nodes are locked, and none should be locked
@@ -183,7 +224,16 @@ diskfs_rename_dir (struct node *fdp, struct node *fnp, const char *fromname,
 	  diskfs_drop_dirstat (fnp, tmpds);
 	  goto out;
 	}
-      assert_backtrace (tmpnp == fdp);
+      if (tmpnp != fdp)
+	{
+	  /* Leftover damage from an interrupted rename: the ".." entry
+	     names some other directory while FNP verifiably resides in
+	     FDP (the FROMNAME lookup above found it here).  Repair the
+	     entry and the parent link counts instead of aborting the
+	     whole filesystem server; the rename then proceeds as if
+	     the damage had never happened.  */
+	  heal_dotdot (fnp, fdp, tdp, fromcred);
+	}
 
       err = diskfs_dirrewrite (fnp, fdp, tdp, "..", tmpds);
       diskfs_file_update (fnp, diskfs_synchronous);
@@ -212,6 +262,7 @@ diskfs_rename_dir (struct node *fdp, struct node *fnp, const char *fromname,
      tdp. */
   if (fnp->dn_stat.st_nlink == diskfs_link_max - 1)
     {
+      heal_dotdot (fnp, fdp, tdp, fromcred);
       pthread_mutex_unlock (&fnp->lock);
       diskfs_drop_dirstat (tdp, ds);
       pthread_mutex_unlock (&tdp->lock);
@@ -253,6 +304,11 @@ diskfs_rename_dir (struct node *fdp, struct node *fnp, const char *fromname,
       fnp->dn_set_ctime = 1;
       /* fnp is locked, so this is safe */
       diskfs_node_update (fnp, diskfs_synchronous);
+
+      /* The ".." rewrite of step 2 succeeded, but the rename did not:
+	 FNP still resides in FDP.  Undo the rewrite so the next rename
+	 of FNP does not abort on assert_backtrace (tmpnp == fdp).  */
+      heal_dotdot (fnp, fdp, tdp, fromcred);
       goto out;
     }
 
