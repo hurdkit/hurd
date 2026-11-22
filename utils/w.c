@@ -405,7 +405,9 @@ uptime (struct proc_stat_list *procs)
 
   err = ps_host_load_info (&load);
   if (err)
-    error (0, err, "ps_host_load_info");
+    /* We have no load averages to print; bail out instead of
+       dereferencing whatever the failed call left in load.  */
+    error (1, err, "ps_host_load_info");
 
   printf ("%s  up %s,  %u user%s,  load averages: %.2f, %.2f, %.2f\n",
 	  tod_rep, uptime_rep, nusers, nusers == 1 ? "" : "s",
