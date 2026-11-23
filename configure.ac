@@ -157,7 +157,17 @@ AC_CACHE_CHECK([for libio],
     [hurd_cv_libio=no]))
 
 # Check if libc contains these functions.
-AC_CHECK_FUNCS(file_exec_paths exec_exec_paths _hurd_exec_paths)
+AC_CHECK_FUNCS(file_exec_paths _hurd_exec_paths)
+# exec_exec_paths lives in libhurduser, not libc: a bare AC_CHECK_FUNCS
+# link probe fails there (modern ld refuses with "DSO missing from
+# command line"), which left HAVE_EXEC_EXEC_PATHS undefined and made the
+# filesystem translators forward every exec through the legacy path-less
+# exec_exec RPC.  `#!' scripts execed with argv[0] != script path then
+# reach the exec server without a file name, which guesses one from
+# argv[0] and breaks them (login execs /bin/loginpr that way).
+AC_CHECK_LIB([hurduser], [exec_exec_paths],
+  [AC_DEFINE([HAVE_EXEC_EXEC_PATHS], [1],
+	     [Define if the exec_exec_paths RPC stub is available.])])
 AC_CHECK_FUNCS(_hurd_libc_proc_init)
 AC_CHECK_FUNCS(mach_port_set_ktype)
 
