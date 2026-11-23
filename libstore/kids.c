@@ -193,11 +193,14 @@ store_open_children (const char *name, int flags,
     {
       int k;
       const char *p, *end;
+      /* Skip the prefix: it names the type of each child, it is not
+	 itself a child.  */
+      const char *start = pfx ? name + pfx_len : name;
       error_t err = 0;
       size_t count = 0;
 
       /* First, see how many there are.  */
-      for (p = name; p && p[1]; p = strchr (p + 1, sep))
+      for (p = start; p && p[1]; p = strchr (p + 1, sep))
 	count++;
 
       /* Make a vector to hold them.  */
@@ -209,7 +212,7 @@ store_open_children (const char *name, int flags,
       memset (*stores, 0, count * sizeof(struct store *));
 
       /* Open each child store.  */
-      for (p = name, k = 0; !err && p && p[1]; p = end, k++)
+      for (p = start, k = 0; !err && p && p[1]; p = end, k++)
 	{
 	  size_t kname_len;
 

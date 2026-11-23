@@ -80,6 +80,9 @@ store_free (struct store *store)
 {
   int k;
 
+  if (!store)
+    return;
+
   if (store->class->cleanup)
     (*store->class->cleanup) (store);
 
