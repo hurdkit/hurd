@@ -248,11 +248,43 @@ check_hashbang (struct execdata *e,
 		 might find it.  */
 
 	      if (file_name_exec && file_name_exec[0] != '\0')
-		file_name = file_name_exec;
-	      else
+		{
+		  /* Use the caller-provided name only when it really
+		     resolves to the script file itself.  login execs
+		     /bin/loginpr with argv[0] set to
+		     "-login prompt (loginpr)" and passes the script path
+		     separately; handing the interpreter an unverified
+		     name made `#!' scripts receive argv[0] as their
+		     FILE_NAME argument, and bash died parsing it as
+		     options, killing every console getty respawn cycle
+		     (vm image boot showed a `set -o' dump with no
+		     `login:' prompt).  */
+		  file_t name_file = MACH_PORT_NULL;
+		  mach_port_t fileid = MACH_PORT_NULL, filefsid = MACH_PORT_NULL;
+		  mach_port_t id = MACH_PORT_NULL, fsid = MACH_PORT_NULL;
+		  ino_t fileno, ino;
+
+		  if (! io_identity (file, &fileid, &filefsid, &fileno)
+		      && ! lookup (file_name_exec, O_EXEC, &name_file)
+		      && ! io_identity (name_file, &id, &fsid, &ino)
+		      && id == fileid)
+		    file_name = file_name_exec;
+
+		  if (id != MACH_PORT_NULL)
+		    mach_port_deallocate (mach_task_self (), id);
+		  if (fsid != MACH_PORT_NULL)
+		    mach_port_deallocate (mach_task_self (), fsid);
+		  if (name_file != MACH_PORT_NULL)
+		    mach_port_deallocate (mach_task_self (), name_file);
+		  if (fileid != MACH_PORT_NULL)
+		    mach_port_deallocate (mach_task_self (), fileid);
+		  if (filefsid != MACH_PORT_NULL)
+		    mach_port_deallocate (mach_task_self (), filefsid);
+		}
+	      if (file_name == NULL)
 		{
 		  error_t error;
-		  file_t name_file;
+		  file_t name_file = MACH_PORT_NULL;
 		  mach_port_t fileid, filefsid;
 		  ino_t fileno;
 		  char *name;
@@ -324,7 +356,10 @@ check_hashbang (struct execdata *e,
 
 		  mach_port_deallocate (mach_task_self (), fileid);
 
-		  if (!error)
+		  /* Require the verified port: a lookup that reported
+		     success without opening the file must not bless an
+		     unverified name (e.g. argv[0]) as the script name.  */
+		  if (!error && name_file != MACH_PORT_NULL)
 		    file_name = name;
 		}
 	    }
