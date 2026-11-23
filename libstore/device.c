@@ -126,6 +126,12 @@ dopen (const char *name, device_t *device, int *mod_flags)
   char *pos;
   char *master;
   char *rest;
+  /* The name to ask the kernel device master for.  For a "@master:device"
+     spec this is the plain device name, so that a spec written for a
+     translator-provided device server (the rumpdisk convention
+     "@/dev/disk:wd0") can still reach a driver that announces its disk to
+     the device master itself (rumpdisk, virtio-blk, ...).  */
+  const char *master_name = name;
 
   /* Parse @master:/dev/hello */
   if ( (name[0] == '@') && (pos = strchr (name, ':')) )
@@ -135,6 +141,7 @@ dopen (const char *name, device_t *device, int *mod_flags)
 	return errno;
 
       rest = pos+1;
+      master_name = rest;
 
       if (*mod_flags & STORE_HARD_READONLY)
 	{
@@ -182,13 +189,13 @@ dopen (const char *name, device_t *device, int *mod_flags)
       if (! err)
 	{
 	  if (*mod_flags & STORE_HARD_READONLY)
-	    err = device_open (dev_master, D_READ, (char *)name, device);
+	    err = device_open (dev_master, D_READ, (char *)master_name, device);
 	  else
 	    {
-	      err = device_open (dev_master, D_WRITE | D_READ, (char *)name, device);
+	      err = device_open (dev_master, D_WRITE | D_READ, (char *)master_name, device);
 	      if (err == ED_READ_ONLY)
 		{
-		  err = device_open (dev_master, D_READ, (char *)name, device);
+		  err = device_open (dev_master, D_READ, (char *)master_name, device);
 		  if (! err)
 		    *mod_flags |= STORE_HARD_READONLY;
 		}
