@@ -91,20 +91,20 @@ static inline int ipv6_rcv_saddr_equal(struct sock *sk, struct sock *sk2)
 		return 1;
 
 	if (sk2->family == AF_INET6 &&
-	    ipv6_addr_any(&sk2->rcv_saddr) &&
+	    ipv6_addr_any(&sk2->net_pinfo.af_inet6.rcv_saddr) &&
 	    !(ipv6_only_sock(sk2) && addr_type == IPV6_ADDR_MAPPED))
 		return 1;
 
 	if (addr_type == IPV6_ADDR_ANY &&
 	    (!ipv6_only_sock(sk) ||
 	     !(sk2->family == AF_INET6 ?
-	       ipv6_addr_type(&sk2->rcv_saddr) == IPV6_ADDR_MAPPED : 1)))
+	       ipv6_addr_type(&sk2->net_pinfo.af_inet6.rcv_saddr) == IPV6_ADDR_MAPPED : 1)))
 		return 1;
 
 	if (sk2->family == AF_INET6 &&
 	    !ipv6_addr_cmp(&np->rcv_saddr,
 			   (sk2->state != TCP_TIME_WAIT ?
-			    &sk2->rcv_saddr :
+			    &sk2->net_pinfo.af_inet6.rcv_saddr :
 			    &((struct tcp_tw_bucket *)sk)->v6_rcv_saddr)))
 		return 1;
 
