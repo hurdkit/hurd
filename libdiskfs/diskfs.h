@@ -881,6 +881,11 @@ diskfs_disknode_node (struct disknode *disknode)
    names "." and ".." are rejected with EINVAL.  */
 error_t diskfs_validate_name (const char *name);
 
+/* Return true if NAME, ignoring trailing slashes, is the special name "."
+   or "..".  Callers which create or link a new entry use this to report
+   EEXIST, since those entries always exist.  */
+int diskfs_name_is_dot_or_dotdot (const char *name);
+
 /* Lookup in directory DP (which is locked) the name NAME.  TYPE will
    either be LOOKUP, CREATE, RENAME, or REMOVE.  CRED identifies the
    user making the call.

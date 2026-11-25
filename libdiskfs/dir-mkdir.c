@@ -38,6 +38,12 @@ try_mkdir (struct protid *dircred,
   if (diskfs_check_readonly ())
     return EROFS;
 
+  /* "." and ".." always exist, so creating them fails with EEXIST
+     (POSIX.1-2024 mkdir).  They must be rejected before diskfs_lookup,
+     which would resolve them to the directory's own entries.  */
+  if (diskfs_name_is_dot_or_dotdot (name))
+    return EEXIST;
+
   /* Validate before diskfs_lookup strips trailing slashes in place.  */
   error = diskfs_validate_name (name);
   if (error)

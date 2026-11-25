@@ -47,6 +47,26 @@ diskfs_validate_name (const char *name)
   return 0;
 }
 
+/* Return true if NAME, ignoring trailing slashes, is one of the special
+   directory entries "." or "..".  These names must be rejected before a
+   lookup, because diskfs_lookup resolves them to the directory's own
+   entries instead of the entry the caller named.  */
+int
+diskfs_name_is_dot_or_dotdot (const char *name)
+{
+  size_t length;
+
+  if (!name)
+    return 0;
+
+  length = strlen (name);
+  while (length > 0 && name[length - 1] == '/')
+    length--;
+
+  return (length == 1 && name[0] == '.')
+         || (length == 2 && name[0] == '.' && name[1] == '.');
+}
+
 /* Lookup in directory DP (which is locked) the name NAME.  TYPE will
    either be LOOKUP, CREATE, RENAME, or REMOVE.  CRED identifies the
    user making the call.

@@ -42,6 +42,13 @@ try_link (struct protid *dircred,
   if (!filecred)
     return EXDEV;
 
+  /* The new name always exists for "." and "..", so linking fails with
+     EEXIST (POSIX.1-2024 link).  They must be rejected before
+     diskfs_lookup, which would resolve them to the directory's own
+     entries.  */
+  if (diskfs_name_is_dot_or_dotdot (name))
+    return EEXIST;
+
   /* Validate before diskfs_lookup strips trailing slashes in place.  */
   err = diskfs_validate_name (name);
   if (err)
