@@ -42,6 +42,11 @@ try_link (struct protid *dircred,
   if (!filecred)
     return EXDEV;
 
+  /* Validate before diskfs_lookup strips trailing slashes in place.  */
+  err = diskfs_validate_name (name);
+  if (err)
+    return err;
+
   np = filecred->po->np;
   txn = diskfs_journal_start_transaction ();
   pthread_mutex_lock (&np->lock);

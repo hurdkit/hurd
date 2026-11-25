@@ -876,6 +876,11 @@ diskfs_disknode_node (struct disknode *disknode)
 /* The library also exports the following functions; they are not generally
    useful unless you are redefining other functions the library provides. */
 
+/* Validate that NAME identifies a single directory entry.  Trailing slashes
+   are accepted, but empty names, names containing a slash, and the special
+   names "." and ".." are rejected with EINVAL.  */
+error_t diskfs_validate_name (const char *name);
+
 /* Lookup in directory DP (which is locked) the name NAME.  TYPE will
    either be LOOKUP, CREATE, RENAME, or REMOVE.  CRED identifies the
    user making the call.

@@ -38,6 +38,11 @@ try_mkdir (struct protid *dircred,
   if (diskfs_check_readonly ())
     return EROFS;
 
+  /* Validate before diskfs_lookup strips trailing slashes in place.  */
+  error = diskfs_validate_name (name);
+  if (error)
+    return error;
+
   txn = diskfs_journal_start_transaction ();
   pthread_mutex_lock (&dnp->lock);
 

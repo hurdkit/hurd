@@ -47,9 +47,12 @@ try_rename (struct protid *fromcred,
   if (! tocred)
     return EXDEV;
 
-  if (!strcmp (fromname, ".") || !strcmp (fromname, "..")
-   || !strcmp (toname,   ".") || !strcmp (toname,   ".."))
-    return EINVAL;
+  /* Validate before diskfs_lookup strips trailing slashes in place.  */
+  err = diskfs_validate_name (fromname);
+  if (!err)
+    err = diskfs_validate_name (toname);
+  if (err)
+    return err;
 
   if (tocred->po->shadow_root != fromcred->po->shadow_root)
     /* Same translator, but in different shadow trees.  */

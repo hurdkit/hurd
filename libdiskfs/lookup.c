@@ -21,6 +21,32 @@
 #include <libdiskfs/diskfs.h>
 #include <string.h>
 
+/* Check that NAME can safely identify one directory entry.  Hurd clients may
+   preserve trailing slashes in the final component, so ignore those here.
+   The special names "." and ".." must be rejected before a lookup because
+   diskfs_lookup strips the trailing slash and would otherwise resolve them
+   to the directory's own entries.  */
+error_t
+diskfs_validate_name (const char *name)
+{
+  size_t length;
+
+  if (!name)
+    return EINVAL;
+
+  length = strlen (name);
+  while (length > 0 && name[length - 1] == '/')
+    length--;
+
+  if (length == 0
+      || memchr (name, '/', length) != NULL
+      || (length == 1 && name[0] == '.')
+      || (length == 2 && name[0] == '.' && name[1] == '.'))
+    return EINVAL;
+
+  return 0;
+}
+
 /* Lookup in directory DP (which is locked) the name NAME.  TYPE will
    either be LOOKUP, CREATE, RENAME, or REMOVE.  CRED identifies the
    user making the call.
