@@ -43,6 +43,12 @@ diskfs_S_io_read (struct protid *cred,
   if (!(cred->po->openstat & O_READ))
     return EBADF;
 
+  /* POSIX requires read(2) on a directory to fail with EISDIR.  Without
+     this check the read of a directory returns end of file, because a
+     directory has no data to read.  */
+  if (S_ISDIR (np->dn_stat.st_mode))
+    return EISDIR;
+
   /* The atime update below writes the inode.  Take the handle before the
      node lock so that start never waits while holding it.  */
   txn = diskfs_journal_start_transaction ();
