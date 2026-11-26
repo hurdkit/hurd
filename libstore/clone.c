@@ -35,7 +35,18 @@ store_clone (struct store *from, struct store **to)
   if (err)
     return err;
 
-  if (from->name)
+  /* _store_create does not claim a reference on PORT; take ours right
+     away so that the error paths below, which all end in store_free,
+     do not drop the send right owned by the source store.  */
+  if (c->port != MACH_PORT_NULL)
+    {
+      err = mach_port_mod_refs (mach_task_self (),
+				c->port, MACH_PORT_RIGHT_SEND, 1);
+      if (err)
+	c->port = MACH_PORT_NULL; /* Don't deallocate it.  */
+    }
+
+  if (!err && from->name)
     {
       c->name = strdup (from->name);
       if (! c->name)
@@ -49,13 +60,6 @@ store_clone (struct store *from, struct store **to)
 	err = ENOMEM;
     }
 
-  if (!err && c->port != MACH_PORT_NULL)
-    {
-      err = mach_port_mod_refs (mach_task_self (),
-				c->port, MACH_PORT_RIGHT_SEND, 1);
-      if (err)
-	c->port = MACH_PORT_NULL; /* Don't deallocate it.  */
-    }
   if (!err && from->source != MACH_PORT_NULL)
     {
       err = mach_port_mod_refs (mach_task_self (),
